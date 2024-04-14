@@ -3,6 +3,10 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 class DataSource:
+    """Base class for data source. 
+    Args:
+        warrant_code (str): Warrant code based on HKEX listing
+    """
     def __init__(self, warrant_code) -> None:
         self.warrant_code = warrant_code
     
@@ -20,6 +24,7 @@ class DataSource:
 
 
 class BOCI(DataSource):
+    """DataSource class using BOCI Data"""
     def __init__(self,warrant_code) -> None:
         super().__init__(warrant_code)
 

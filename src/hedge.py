@@ -3,7 +3,7 @@ from .warrant import Warrant
 from .utils import get_trading_days
 import pandas as pd
 class HedgePortfolio:
-    def __init__(self,warrant:DataSource,r = 0.00,start_date = None) -> None:
+    def __init__(self,warrant:DataSource,r = 0.00) -> None:
         """Portoflio class to hedge warrant with underlying stock, it is self-financing.
 
         Args:
@@ -17,6 +17,7 @@ class HedgePortfolio:
         self.r = r
 
     def get_T(self,start_date = None):
+        """Get the time to maturity of the warrant in years"""
         maturity = self.warrant.info_df['Maturity Date(D/M/Y)']
         maturity = pd.to_datetime(maturity, format='%d/%m/%Y').date()
         start_date = start_date or self.warrant.price_df.iloc[0]['sdate2']
@@ -24,6 +25,7 @@ class HedgePortfolio:
         return get_trading_days(start_date,maturity)/252
     
     def get_warrant_option(self,date) -> Warrant:
+        """Get the warrant object at a given date"""
         T = self.get_T(start_date=date)
         temp = self.warrant.price_df.set_index('sdate2').copy()
         print("Warrant price: ",temp['wlast'].loc[date])
@@ -49,6 +51,7 @@ class HedgePortfolio:
         self.summary(start_date)
 
     def update_portfolio(self):
+        """Update the portfolio with the current warrant price and underlying price"""
         date = self.warrant.price_df['sdate2'].iloc[0]
         warrant = self.get_warrant_option(date=date)
         v0 = self.stock * float(self.warrant.price_df['ulast'].iloc[0]) + self.riskless # current value of portfolio
@@ -58,6 +61,7 @@ class HedgePortfolio:
         self.summary()
 
     def summary(self,start_date = None):
+        """Print the summary of the portfolio"""
         print("------Portfolio Summary------")
         print(f"Stock Units: {self.stock}")
         print(f"Riskless Units: {self.riskless}")

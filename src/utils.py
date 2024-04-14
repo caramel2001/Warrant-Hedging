@@ -5,6 +5,7 @@ from scipy.stats import norm
 from tqdm import tqdm
 
 def get_trading_days(start_date:str, end_date:str, exchange="HKEX"):
+    """Get the number of trading days between two dates."""
     # Create a calendar for the HKEX
     hkex_calendar = mcal.get_calendar(exchange)
     # Get the trading days between the start and end date

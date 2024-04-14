@@ -2,6 +2,7 @@ from scipy.stats import norm
 import numpy as np
 from .utils import implied_volatility_call, implied_volatility_put
 class Option:
+    """Base Option class for Call and Put Options with Black-Scholes formula."""
     def __init__(self,C,S,K,T,r,sigma=None,call=True) -> None:
         self.C = C
         self.S = S
