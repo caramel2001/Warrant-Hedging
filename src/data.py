@@ -1,9 +1,27 @@
 import requests
 import pandas as pd
 from matplotlib import pyplot as plt
-class BOCI:
-    def __init__(self,warrant_code) -> None:
+
+class DataSource:
+    def __init__(self, warrant_code) -> None:
         self.warrant_code = warrant_code
+    
+    def get_data(self):
+        raise NotImplementedError
+
+    def price_plot(self):
+        raise NotImplementedError
+    
+    def get_price(self):
+        raise NotImplementedError
+    
+    def get_info(self):
+        raise NotImplementedError
+
+
+class BOCI(DataSource):
+    def __init__(self,warrant_code) -> None:
+        super().__init__(warrant_code)
 
     def get_data(self,plot=True):
         self.info_df = self.get_info()

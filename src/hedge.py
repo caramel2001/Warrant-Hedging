@@ -1,126 +1,73 @@
-import numpy as np
-from scipy.stats import norm
-from tqdm import tqdm
+from .data import DataSource
+from .warrant import Warrant
+from .utils import get_trading_days
+import pandas as pd
+class HedgePortfolio:
+    def __init__(self,warrant:DataSource,r = 0.00,start_date = None) -> None:
+        """Portoflio class to hedge warrant with underlying stock, it is self-financing.
 
-def black_scholes_call(S, K, T, r, sigma):
-    """
-    Calculate the Black-Scholes call option price and delta.
+        Args:
+            warrant (DataSource): DataSource Object
+            r (float, optional): Risk free rate. Defaults to 0.00.
+        """
+        self.riskless = None
+        self.stock = None
+        self.warrant = warrant
+        self.warrant.get_data()
+        self.r = r
 
-    Parameters:
-    S - current stock price
-    K - option strike price
-    T - time to maturity
-    r - risk-free interest rate
-    sigma - volatility of the underlying stock
-
-    Returns:
-    call_price - price of the call option
-    delta - delta of the call option
-    """
-    # Calculate d1 and d2
-    S = round(S, 5)
-    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d1 = round(d1, 5)
-    d2 = d1 - sigma * np.sqrt(T)
-    d2 = round(d2, 5)
-    # Call option price
-    call_price = S * round(norm.cdf(d1),5) - K * np.exp(-r * T) * round(norm.cdf(d2),5)
-
-    # Delta of the call option
-    delta = norm.cdf(d1)
-
-    return call_price, delta
-
-def black_scholes_put(S, K, T, r, sigma):   
-    """
-    Calculate the Black-Scholes put option price and delta.
-
-    Parameters:
-    S - current stock price
-    K - option strike price
-    T - time to maturity
-    r - risk-free interest rate
-    sigma - volatility of the underlying stock
-
-    Returns:
-    put_price - price of the put option
-    delta - delta of the put option
-    """
-    # Calculate d1 and d2
-    S = round(S, 5)
-    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d1 = round(d1, 5)
-    d2 = d1 - sigma * np.sqrt(T)
-    d2 = round(d2, 5)
-    # Put option price
-    put_price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
-
-    # Delta of the put option
-    delta = norm.cdf(d1) - 1
-
-    return put_price, delta
-
-def vega(S, K, T, r, sigma):
-    '''
-    :param S: Asset price
-    :param K: Strike price
-    :param T: Time to Maturity
-    :param r: risk-free rate (treasury bills)
-    :param sigma: volatility
-    :return: partial derivative w.r.t volatility
-    '''
-    N_prime = norm.pdf
-
-    ### calculating d1 from black scholes
-    d1 = (np.log(S / K) + (r + sigma ** 2 / 2) * T) / (sigma * np.sqrt(T))
-
+    def get_T(self,start_date = None):
+        maturity = self.warrant.info_df['Maturity Date(D/M/Y)']
+        maturity = pd.to_datetime(maturity, format='%d/%m/%Y').date()
+        start_date = start_date or self.warrant.price_df.iloc[0]['sdate2']
+        start_date = pd.to_datetime(start_date, format='%d/%m/%Y').date()
+        return get_trading_days(start_date,maturity)/252
     
-    vega = S  * np.sqrt(T) * N_prime(d1)
-    return vega
+    def get_warrant_option(self,date) -> Warrant:
+        T = self.get_T(start_date=date)
+        temp = self.warrant.price_df.set_index('sdate2').copy()
+        print("Warrant price: ",temp['wlast'].loc[date])
+        C = float(temp['wlast'].loc[date])
+        S = float(temp['ulast'].loc[date])
+        K = float(self.warrant.info_df['Strike(HKD)'])
+        warrant = Warrant(C,S,K,T,self.r,sigma = None, # calculates Implied volatility
+            call = self.warrant.info_df['Type'] == 'Call',
+            entitlement=float(self.warrant.info_df['Conversion Ratio'])
+        )
+        return warrant
 
-def implied_volatility_put(P, S, K, T, r, tol=0.00001):
-    '''
-    :param P: Observed put price
-    :param S: Asset price
-    :param K: Strike Price
-    :param T: Time to Maturity
-    :param r: riskfree rate
-    :param tol: error tolerance in result
-    :return: implied volatility in percent
-    '''
-    sigma = 0.3
-    for i in tqdm(range(100)):
-        ### calculate
-        diff = black_scholes_put(S, K, T, r, sigma)[0] - P
-        if abs(diff) < tol:
-            print(f'found on {i}th iteration')
-            print(f'difference is equal to {diff}')
-            break
-        sigma = sigma - diff / vega(S, K, T, r, sigma)
-    return sigma
+    def initialize_portfolio(self,start_date = None):
+        """Initialize the portfolio with the warrant and riskless asset
+        
+        Args:
+            start_date (str, optional): Start date of the portfolio in D/M/Y format. Defaults to None that means the Current last trading date of the warrant.
+        """
+        warrant = self.get_warrant_option(start_date)
+        _, delta = warrant()
+        self.stock = delta
+        self.riskless = float(warrant.C - delta * warrant.S)
+        self.summary(start_date)
 
-def implied_volatility_call(C, S, K, T, r, tol=0.00001,
-                            max_iterations=100):
-    '''
-    :param C: Observed call price
-    :param S: Asset price
-    :param K: Strike Price
-    :param T: Time to Maturity
-    :param r: riskfree rate
-    :param tol: error tolerance in result
-    :param max_iterations: max iterations to update vol
-    :return: implied volatility in percent
-    '''
-    sigma = 0.3
-    for i in tqdm(range(max_iterations)):
-        ### calculate difference between blackscholes price and market price with
-        ### iteratively updated volality estimate
-        diff = black_scholes_call(S, K, T, r, sigma)[0] - C
-        ###break if difference is less than specified tolerance level
-        if abs(diff) < tol:
-            print(f'found on {i}th iteration')
-            print(f'difference is equal to {diff}')
-            break
-        ### use newton rapshon to update the estimate
-        sigma = sigma - diff / vega(S, K, T, r, sigma)
-    return sigma
+    def update_portfolio(self):
+        date = self.warrant.price_df['sdate2'].iloc[0]
+        warrant = self.get_warrant_option(date=date)
+        v0 = self.stock * float(self.warrant.price_df['ulast'].iloc[0]) + self.riskless # current value of portfolio
+        _, delta = warrant()
+        self.stock = delta
+        self.riskless = v0 - delta * float(self.warrant.price_df['ulast'].iloc[0])
+        self.summary()
+
+    def summary(self,start_date = None):
+        print("------Portfolio Summary------")
+        print(f"Stock Units: {self.stock}")
+        print(f"Riskless Units: {self.riskless}")
+        if self.stock is not None and self.riskless is not None:
+            if start_date is not None:
+                S = float(self.warrant.price_df.set_index('sdate2').loc[start_date]['ulast'])
+            else:
+                S = float(self.warrant.price_df['ulast'].iloc[0])
+            print(f"Current Portfolio Value: {self.stock * S + self.riskless}")
+        print("----------------------------")
+
+
+

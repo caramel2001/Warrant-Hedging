@@ -1,6 +1,6 @@
 from scipy.stats import norm
 import numpy as np
-from hedge import implied_volatility_call, implied_volatility_put
+from .utils import implied_volatility_call, implied_volatility_put
 class Option:
     def __init__(self,C,S,K,T,r,sigma=None,call=True) -> None:
         self.C = C
@@ -9,11 +9,13 @@ class Option:
         self.T = T
         self.r = r
         if sigma is None:
+            print("Calculating Implied Volatility")
             # calculate implied volatility
             if call:
                 sigma = implied_volatility_call(C,S,K,T,r)
             else:
                 sigma = implied_volatility_put(C,S,K,T,r)
+        print("Calculated Implied Volatility: ",sigma)
         self.sigma = sigma
 
     def call(self):
@@ -44,7 +46,17 @@ class Warrant(Option):
         self.entitlement = entitlement
 
     def call(self):
-        return super().call()/self.entitlement
+        price,delta = super().call()
+        price = price/self.entitlement
+        return price,delta 
     
     def put(self):
-        return super().put()/self.entitlement
+        price, delta = super().put()
+        price = price/self.entitlement
+        return price, delta 
+    
+    def __call__(self):
+        if self.call:
+            return self.call()
+        else:
+            return self.put()
