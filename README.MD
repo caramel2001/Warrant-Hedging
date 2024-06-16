@@ -1,4 +1,4 @@
-# Hedging HKEX Listed Warrants (MH:4514 Financial Mathematics)
+# Hedging HKEX Listed Warrants (MH4514: Financial Mathematics)
 
 Please Star ⭐️ the repo, if you find it helpful....
 
